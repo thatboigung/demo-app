@@ -29,6 +29,7 @@ interface ClaimResult {
   claimId: string;
   flowType: 'Service Provider' | 'Member Reimbursement';
   hospital: string;
+  hospitalBankAccount?: string;
   memberId: string;
   memberName?: string;
   payoutAccount?: string;
@@ -43,6 +44,7 @@ interface HistoryItem {
   claimId: string;
   flowType: 'Service Provider' | 'Member Reimbursement';
   hospital: string;
+  hospitalBankAccount?: string;
   memberId: string;
   memberName?: string;
   payoutAccount?: string;
@@ -68,6 +70,7 @@ const INITIAL_HISTORY: HistoryItem[] = [
     claimId: 'CLM-2026-94810',
     flowType: 'Service Provider',
     hospital: 'Avenues Clinic',
+    hospitalBankAccount: 'CBZ Bank (Acc: 01129384920)',
     memberId: 'CIM-77412',
     amount: 450.00,
     status: 'Approved',
@@ -92,6 +95,7 @@ const INITIAL_HISTORY: HistoryItem[] = [
     claimId: 'CLM-2026-83194',
     flowType: 'Service Provider',
     hospital: 'Harare Central Hospital',
+    hospitalBankAccount: 'Stanbic Bank (Acc: 0240019283)',
     memberId: 'CIM-44820',
     amount: 180.00,
     status: 'Rejected',
@@ -116,6 +120,7 @@ const INITIAL_HISTORY: HistoryItem[] = [
     claimId: 'CLM-2026-72015',
     flowType: 'Service Provider',
     hospital: 'Parirenyatwa Hospital',
+    hospitalBankAccount: 'Steward Bank (Acc: 1009823411)',
     memberId: 'CIM-99103',
     amount: 320.00,
     status: 'Approved',
@@ -182,6 +187,7 @@ export default function App() {
 
   // Provider Claims Form State
   const [hospitalName, setHospitalName] = useState<string>('Parirenyatwa Hospital');
+  const [hospitalBankAccount, setHospitalBankAccount] = useState<string>('CBZ Bank (Acc: 109283746501)');
   const [memberId, setMemberId] = useState<string>('CIM-88213');
   const [claimAmount, setClaimAmount] = useState<number | string>(200);
 
@@ -256,6 +262,7 @@ export default function App() {
   // Reset Provider claim form and result state
   const handleReset = () => {
     setHospitalName('Parirenyatwa Hospital');
+    setHospitalBankAccount('CBZ Bank (Acc: 109283746501)');
     setMemberId('CIM-88213');
     setClaimAmount(200);
     setClaimResult(null);
@@ -319,7 +326,7 @@ export default function App() {
   // Provider Sequential Real-Time Submission Processing Handler
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!hospitalName || !memberId || !claimAmount || Number(claimAmount) <= 0) return;
+    if (!hospitalName || !hospitalBankAccount || !memberId || !claimAmount || Number(claimAmount) <= 0) return;
 
     setIsSubmitting(true);
     setClaimResult(null);
@@ -342,6 +349,7 @@ export default function App() {
       claimId: `CLM-2026-${randomIdNum}`,
       flowType: 'Service Provider',
       hospital: hospitalName.trim(),
+      hospitalBankAccount: hospitalBankAccount.trim(),
       memberId: memberId.trim(),
       amount: Number(claimAmount),
       status: isApproved ? 'Approved' : 'Rejected',
@@ -393,6 +401,7 @@ export default function App() {
             claimId: newClaim.claimId,
             flowType: 'Service Provider',
             hospital: newClaim.hospital,
+            hospitalBankAccount: newClaim.hospitalBankAccount,
             memberId: newClaim.memberId,
             amount: newClaim.amount,
             status: newClaim.status,
@@ -416,6 +425,7 @@ export default function App() {
             claimId: newClaim.claimId,
             flowType: 'Service Provider',
             hospital: newClaim.hospital,
+            hospitalBankAccount: newClaim.hospitalBankAccount,
             memberId: newClaim.memberId,
             amount: newClaim.amount,
             status: newClaim.status,
@@ -538,13 +548,15 @@ export default function App() {
 
     const matchesId = item.claimId.toLowerCase().includes(q);
     const matchesHospital = item.hospital.toLowerCase().includes(q);
+    const matchesHospitalBank = item.hospitalBankAccount ? item.hospitalBankAccount.toLowerCase().includes(q) : false;
     const matchesMemberId = item.memberId.toLowerCase().includes(q);
     const matchesMemberName = item.memberName ? item.memberName.toLowerCase().includes(q) : false;
+    const matchesPayoutAccount = item.payoutAccount ? item.payoutAccount.toLowerCase().includes(q) : false;
     const matchesFlowType = item.flowType.toLowerCase().includes(q);
     const matchesAmount = item.amount.toString().includes(q) || `$${item.amount.toFixed(2)}`.toLowerCase().includes(q);
     const matchesDate = item.timestamp.toLowerCase().includes(q);
 
-    return matchesId || matchesHospital || matchesMemberId || matchesMemberName || matchesFlowType || matchesAmount || matchesDate;
+    return matchesId || matchesHospital || matchesHospitalBank || matchesMemberId || matchesMemberName || matchesPayoutAccount || matchesFlowType || matchesAmount || matchesDate;
   });
 
   // Theme-dependent root container styling
@@ -874,7 +886,7 @@ export default function App() {
               <ShieldCheck className="w-7 h-7" />
             </div>
             <h1 className={`text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              CIMAS HealthPay Direct
+              Health Pay
             </h1>
             <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               Provider Portal Sign In
@@ -1032,7 +1044,7 @@ export default function App() {
             }`}>
             <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'
               }`}>
-              CIMAS HealthPay Direct
+              Health Pay
             </h1>
             <p className={`text-sm sm:text-base font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
               }`}>
@@ -1101,7 +1113,7 @@ export default function App() {
         <footer className={`py-8 mt-12 transition-colors ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-sm'
           }`}>
           <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center text-xs font-medium text-slate-500">
-            <p>&copy; {new Date().getFullYear()} CIMAS Health Group. All rights reserved. • CIMAS HealthPay Direct v2.4</p>
+            <p>&copy; {new Date().getFullYear()} CIMAS Health Group. All rights reserved. • Health Pay v2.4</p>
           </div>
         </footer>
 
@@ -1167,7 +1179,7 @@ export default function App() {
           <div className="flex items-center justify-between gap-4">
             <h1 className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'
               }`}>
-              CIMAS HealthPay Direct
+              Health Pay
             </h1>
             <button
               type="button"
@@ -1176,7 +1188,7 @@ export default function App() {
                 ? 'bg-[#1a243a] text-blue-400 hover:bg-[#22304d]'
                 : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                 }`}
-              title="About CIMAS HealthPay Direct"
+              title="About Health Pay"
             >
               <Info className="w-4 h-4" />
               <span className="hidden sm:inline">About</span>
@@ -1256,7 +1268,7 @@ export default function App() {
 
               <form onSubmit={handleSubmit} className="space-y-6">
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex flex-col gap-6">
 
                   {/* Field 1: Hospital Name */}
                   <div className="space-y-2">
@@ -1270,6 +1282,7 @@ export default function App() {
                       required
                       value={hospitalName}
                       onChange={(e) => setHospitalName(e.target.value)}
+                      placeholder="e.g. Parirenyatwa Hospital"
                       className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
                         ? 'bg-[#0f172a] text-white'
                         : 'bg-[#f8fafc] text-slate-900'
@@ -1277,7 +1290,27 @@ export default function App() {
                     />
                   </div>
 
-                  {/* Field 2: Patient or Member ID */}
+                  {/* Field 2: Hospital Bank Account / Payout Destination */}
+                  <div className="space-y-2">
+                    <label htmlFor="hospitalBankAccount" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                      Hospital bank account
+                    </label>
+                    <input
+                      id="hospitalBankAccount"
+                      type="text"
+                      required
+                      value={hospitalBankAccount}
+                      onChange={(e) => setHospitalBankAccount(e.target.value)}
+                      placeholder="e.g. CBZ Bank (Acc: 109283746501)"
+                      className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                        ? 'bg-[#0f172a] text-white'
+                        : 'bg-[#f8fafc] text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  {/* Field 3: Patient or Member ID */}
                   <div className="space-y-2">
                     <label htmlFor="memberId" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'
                       }`}>
@@ -1289,6 +1322,7 @@ export default function App() {
                       required
                       value={memberId}
                       onChange={(e) => setMemberId(e.target.value)}
+                      placeholder="e.g. CIM-88213"
                       className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
                         ? 'bg-[#0f172a] text-white'
                         : 'bg-[#f8fafc] text-slate-900'
@@ -1296,7 +1330,7 @@ export default function App() {
                     />
                   </div>
 
-                  {/* Field 3: Claim Amount */}
+                  {/* Field 4: Claim Amount */}
                   <div className="space-y-2">
                     <label htmlFor="claimAmount" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'
                       }`}>
@@ -1417,7 +1451,7 @@ export default function App() {
                   </div>
 
                   {/* Detail Items Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                     <div className={`p-4 rounded-xl space-y-1 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
                       }`}>
@@ -1440,6 +1474,18 @@ export default function App() {
                       <div className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'
                         }`}>
                         {claimResult.hospital}
+                      </div>
+                    </div>
+
+                    <div className={`p-4 rounded-xl space-y-1 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+                      }`}>
+                      <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
+                        }`}>
+                        Hospital bank account
+                      </div>
+                      <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+                        }`}>
+                        {claimResult.hospitalBankAccount || 'CBZ Bank (Acc: 109283746501)'}
                       </div>
                     </div>
 
@@ -1549,6 +1595,9 @@ export default function App() {
                             }`}>
                             ${(claimResult.amount * 0.97).toFixed(2)}
                           </div>
+                          <div className={`text-[11px] font-semibold truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {claimResult.hospitalBankAccount || 'CBZ Bank (Acc: 109283746501)'}
+                          </div>
                         </div>
 
                         {/* Box 2: Platform (1%) */}
@@ -1600,9 +1649,14 @@ export default function App() {
                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                             Bank <ArrowRight className="w-3.5 h-3.5 inline opacity-60" /> Hospital (97%)
                           </span>
-                          <span className="font-mono text-emerald-600 font-extrabold">
-                            ${(claimResult.amount * 0.97).toFixed(2)} USD
-                          </span>
+                          <div className="text-right">
+                            <span className="font-mono text-emerald-600 font-extrabold block">
+                              ${(claimResult.amount * 0.97).toFixed(2)} USD
+                            </span>
+                            <span className={`text-[10px] font-medium block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {claimResult.hospitalBankAccount || 'CBZ Bank (Acc: 109283746501)'}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex justify-between items-center">
@@ -1693,7 +1747,7 @@ export default function App() {
 
               <form onSubmit={handleMemberSubmit} className="space-y-6">
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-6">
 
                   {/* Field 1: Member Name */}
                   <div className="space-y-2">
@@ -2252,6 +2306,11 @@ export default function App() {
                         <div className={isDarkMode ? 'text-slate-200' : 'text-slate-800'}>
                           {item.hospital}
                         </div>
+                        {item.flowType === 'Service Provider' && item.hospitalBankAccount && (
+                          <div className={`text-xs font-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Bank: {item.hospitalBankAccount}
+                          </div>
+                        )}
                         {item.memberName && (
                           <div className={`text-xs font-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                             Member: {item.memberName}
@@ -2325,7 +2384,7 @@ export default function App() {
       <footer className={`py-8 mt-12 transition-colors ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-sm'
         }`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center text-xs font-medium text-slate-500">
-          <p>&copy; {new Date().getFullYear()} CIMAS Health Group. All rights reserved. • CIMAS HealthPay Direct v2.4</p>
+          <p>&copy; {new Date().getFullYear()} CIMAS Health Group. All rights reserved. • Health Pay v2.4</p>
         </div>
       </footer>
 
