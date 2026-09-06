@@ -1052,53 +1052,112 @@ export default function App() {
             </p>
           </section>
 
-          {/* Section 1: How It Works */}
+          {/* Section 1: How Health Pay Works (Simplified Minimal Design) */}
           <section className={`rounded-2xl p-6 sm:p-8 space-y-6 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
             }`}>
+            
             <div className="space-y-1">
               <h2 className={`text-xl sm:text-2xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'
                 }`}>
-                How it works
+                How Health Pay works
               </h2>
               <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
                 }`}>
-                Two streamlined processing models for service providers and member reimbursements.
+                Detailed process flow for service provider settlements and member reimbursements.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-6 pt-1">
 
-              {/* Step 1 */}
-              <div className={`p-5 rounded-2xl space-y-2.5 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+              {/* 1. Service Provider Payments */}
+              <div className={`p-6 rounded-xl space-y-4 border ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-[#f8fafc] border-slate-200/80'
                 }`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-blue-600">Provider Flow</span>
-                  <Building2 className={`w-4 h-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <h3 className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    1. Service Provider Payments (Instant 97% Payout)
+                  </h3>
+                  <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Hospital Settlement Flow
+                  </span>
                 </div>
-                <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Service Provider Payments
-                </h3>
-                <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Hospitals receive 97% net instant payout from bank liquidity partners, with 30-day clearing settlement.
+
+                <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Connects hospitals, CIMAS rule verification, and bank liquidity partners to eliminate 60–90 day payment delays.
                 </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-blue-600 dark:text-blue-400">Step 1: Payload Submission</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Hospital enters claim details, patient CIMAS ID, claim amount, and hospital bank account.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-blue-600 dark:text-blue-400">Step 2: Gateway Routing</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Health Pay API Gateway validates structure and securely routes request payload.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-blue-600 dark:text-blue-400">Step 3: CIMAS Verification</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      CIMAS API verifies active member status and benefit coverage limits in real time.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-blue-600 dark:text-blue-400">Step 4: Bank Disbursal</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Bank API pays 97% net funds directly to the hospital bank account within seconds.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              {/* Step 2 */}
-              <div className={`p-5 rounded-2xl space-y-2.5 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+              {/* 2. Member Cash Reimbursement */}
+              <div className={`p-6 rounded-xl space-y-4 border ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-[#f8fafc] border-slate-200/80'
                 }`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-blue-600">Member Flow</span>
-                  <User className={`w-4 h-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <h3 className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    2. Member Reimbursement (100% Direct Cash Refund)
+                  </h3>
+                  <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Patient Refund Flow
+                  </span>
                 </div>
-                <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Member Reimbursement
-                </h3>
-                <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Members who paid cash get 100% direct mobile money/bank reimbursement after staged CIMAS verification.
+
+                <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Direct cash refunds for members who paid cash out-of-pocket at clinics or medical centers.
                 </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">Phase 1: Claim Entry</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Member submits name, CIMAS ID, cash receipt amount, and EcoCash/Bank payout account.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">Phase 2: Eligibility Check</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Staged verification confirms active member standing and covered policy limits.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400">Phase 3: Direct Refund</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Full 100% cash reimbursement is transferred with zero fee deductions directly to member.
+                    </p>
+                  </div>
+                </div>
               </div>
 
             </div>
+
           </section>
 
           {/* Section 2: Integration Status Panel */}
