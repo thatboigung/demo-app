@@ -22,12 +22,16 @@ import {
   Lock,
   Server,
   AlertCircle,
-  Activity
+  Activity,
+  Pill,
+  Stethoscope,
+  Smartphone,
+  FileCheck
 } from 'lucide-react';
 
 interface ClaimResult {
   claimId: string;
-  flowType: 'Service Provider' | 'Member Reimbursement';
+  flowType: 'Service Provider' | 'Member Reimbursement' | 'Pharmacy e-Prescription';
   hospital: string;
   hospitalBankAccount?: string;
   memberId: string;
@@ -37,12 +41,21 @@ interface ClaimResult {
   status: 'Approved' | 'Rejected';
   rejectionReason?: string;
   timestamp: string;
+  preAuthCode?: string;
+  doctorName?: string;
+  medicationDetails?: string;
+  pharmacyPayout?: number;
+  fraudChecks?: {
+    limitOk: boolean;
+    duplicateNo: boolean;
+    patternOk: boolean;
+  };
 }
 
 interface HistoryItem {
   id: string;
   claimId: string;
-  flowType: 'Service Provider' | 'Member Reimbursement';
+  flowType: 'Service Provider' | 'Member Reimbursement' | 'Pharmacy e-Prescription';
   hospital: string;
   hospitalBankAccount?: string;
   memberId: string;
@@ -53,6 +66,8 @@ interface HistoryItem {
   rejectionReason?: string;
   hospitalPayout?: number;
   memberPayout?: number;
+  pharmacyPayout?: number;
+  preAuthCode?: string;
   timestamp: string;
 }
 
@@ -153,8 +168,8 @@ export default function App() {
   // Navigation View State ('app' | 'about')
   const [currentView, setCurrentView] = useState<'app' | 'about'>('app');
 
-  // Active Operating Mode/Tab State ('provider' | 'member')
-  const [activeTab, setActiveTab] = useState<'provider' | 'member'>('provider');
+  // Active Operating Mode/Tab State ('provider' | 'member' | 'pharmacy')
+  const [activeTab, setActiveTab] = useState<'provider' | 'member' | 'pharmacy'>('provider');
 
   // Theme State (default: light mode with off-white background)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
@@ -211,8 +226,96 @@ export default function App() {
   const [memberProcessingStep, setMemberProcessingStep] = useState<number>(0);
   const [memberProcessingStatusLabel, setMemberProcessingStatusLabel] = useState<string>('');
 
-  // Payment History State (Pre-populated with items from both flows)
-  const [paymentHistory, setPaymentHistory] = useState<HistoryItem[]>(INITIAL_HISTORY);
+  // Payment History State (Pre-populated with items from all flows)
+  const [paymentHistory, setPaymentHistory] = useState<HistoryItem[]>([
+    {
+      id: 'hist-0',
+      claimId: 'RX-2026-99821',
+      flowType: 'Pharmacy e-Prescription',
+      hospital: 'MedPlus Pharmacy',
+      hospitalBankAccount: 'FBC Bank (Acc: 99182371920)',
+      memberId: 'CIM-88213',
+      memberName: 'Tinashe Moyo',
+      preAuthCode: 'PA-99821',
+      amount: 15.00,
+      status: 'Approved',
+      pharmacyPayout: 14.55,
+      timestamp: 'Sep 3, 2026 at 23:45:10'
+    },
+    ...INITIAL_HISTORY
+  ]);
+
+  // e-Prescription & Pharmacy Anti-Fraud Store & Form States
+  interface PreAuthRecord {
+    code: string;
+    memberId: string;
+    memberName: string;
+    doctorName: string;
+    medication: string;
+    amount: number;
+    otp: string;
+    isClaimed: boolean;
+    createdAt: string;
+    memberLimitLeft: number;
+  }
+
+  const [preAuthDatabase, setPreAuthDatabase] = useState<Record<string, PreAuthRecord>>({
+    'PA-99821': {
+      code: 'PA-99821',
+      memberId: 'CIM-88213',
+      memberName: 'Tinashe Moyo',
+      doctorName: 'Dr. A. Moyo, MBChB',
+      medication: 'Amoxicillin x 21 tabs',
+      amount: 15.00,
+      otp: '8821',
+      isClaimed: false,
+      createdAt: 'Today at 10:15 AM',
+      memberLimitLeft: 40.00
+    }
+  });
+
+  // e-Prescription Active Role Sub-Tab ('doctor' | 'pharmacy')
+  const [pharmacyRoleSubTab, setPharmacyRoleSubTab] = useState<'doctor' | 'pharmacy'>('doctor');
+
+  // Doctor Form State
+  const [docMemberId, setDocMemberId] = useState<string>('CIM-88213');
+  const [docDoctorName, setDocDoctorName] = useState<string>('Dr. A. Moyo, MBChB');
+  const [docMedication, setDocMedication] = useState<string>('Amoxicillin x 21 tabs');
+  const [docAmount, setDocAmount] = useState<number | string>(15);
+  const [isSubmittingDoctor, setIsSubmittingDoctor] = useState<boolean>(false);
+  const [lastGeneratedRecord, setLastGeneratedRecord] = useState<PreAuthRecord | null>({
+    code: 'PA-99821',
+    memberId: 'CIM-88213',
+    memberName: 'Tinashe Moyo',
+    doctorName: 'Dr. A. Moyo, MBChB',
+    medication: 'Amoxicillin x 21 tabs',
+    amount: 15.00,
+    otp: '8821',
+    isClaimed: false,
+    createdAt: 'Sep 6, 2026',
+    memberLimitLeft: 40.00
+  });
+
+  // Pharmacy Form State
+  const [pharmacyNameInput, setPharmacyNameInput] = useState<string>('MedPlus Pharmacy');
+  const [pharmacyBankInput, setPharmacyBankInput] = useState<string>('FBC Bank (Acc: 99182371920)');
+  const [pharmacyPreAuthInput, setPharmacyPreAuthInput] = useState<string>('PA-99821');
+  const [pharmacyOtpInput, setPharmacyOtpInput] = useState<string>('8821');
+  const [pharmacyClaimAmount, setPharmacyClaimAmount] = useState<number | string>(15);
+
+  // Submission & Result State (Pharmacy Flow)
+  const [isSubmittingPharmacy, setIsSubmittingPharmacy] = useState<boolean>(false);
+  const [pharmacyClaimResult, setPharmacyClaimResult] = useState<ClaimResult | null>(null);
+  const [pharmacyProcessingStep, setPharmacyProcessingStep] = useState<number>(0);
+  const [pharmacyStatusLabel, setPharmacyStatusLabel] = useState<string>('');
+  const [pharmacyCountdown, setPharmacyCountdown] = useState<number>(10);
+  const [fraudBlockedState, setFraudBlockedState] = useState<{
+    isBlocked: boolean;
+    reason: string;
+    limitLeft: number;
+    action: string;
+    claimAmount: number;
+  } | null>(null);
 
   // History Filtering State: Tab & Search Query
   const [historyTab, setHistoryTab] = useState<'All' | 'Approved' | 'Rejected'>('All');
@@ -257,6 +360,7 @@ export default function App() {
     setCurrentView('app');
     handleReset();
     handleResetMember();
+    handleResetPharmacy();
   };
 
   // Reset Provider claim form and result state
@@ -305,12 +409,25 @@ export default function App() {
     }
   }, [claimResult]);
 
-  // Manage 8-second countdown when a Member Reimbursement claim is Approved
+  // Reset Pharmacy e-Prescription form and result state
+  const handleResetPharmacy = () => {
+    setPharmacyPreAuthInput('PA-99821');
+    setPharmacyOtpInput('8821');
+    setPharmacyClaimAmount(15);
+    setPharmacyClaimResult(null);
+    setIsSubmittingPharmacy(false);
+    setPharmacyProcessingStep(0);
+    setPharmacyStatusLabel('');
+    setPharmacyCountdown(10);
+    setFraudBlockedState(null);
+  };
+
+  // Manage 10-second countdown when a Pharmacy claim is Approved
   useEffect(() => {
-    if (memberClaimResult && memberClaimResult.status === 'Approved') {
-      setMemberCountdown(8);
+    if (pharmacyClaimResult && pharmacyClaimResult.status === 'Approved') {
+      setPharmacyCountdown(10);
       const timer = setInterval(() => {
-        setMemberCountdown((prev) => {
+        setPharmacyCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
             return 0;
@@ -321,7 +438,337 @@ export default function App() {
 
       return () => clearInterval(timer);
     }
-  }, [memberClaimResult]);
+  }, [pharmacyClaimResult]);
+
+  // Doctor submission handler for e-Prescription
+  const handleDoctorPrescribe = (e: FormEvent) => {
+    e.preventDefault();
+    if (!docMemberId || !docDoctorName || !docMedication || !docAmount || Number(docAmount) <= 0) return;
+
+    setIsSubmittingDoctor(true);
+
+    setTimeout(() => {
+      const randomNum = Math.floor(10000 + Math.random() * 90000);
+      const newPreAuthCode = `PA-${randomNum}`;
+      const randomOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+      const now = new Date();
+      const formattedTimestamp = now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }) + ' at ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const newRecord: PreAuthRecord = {
+        code: newPreAuthCode,
+        memberId: docMemberId.trim(),
+        memberName: docMemberId.trim() === 'CIM-88213' ? 'Tinashe Moyo' : 'Member ' + docMemberId.trim(),
+        doctorName: docDoctorName.trim(),
+        medication: docMedication.trim(),
+        amount: Number(docAmount),
+        otp: randomOtp,
+        isClaimed: false,
+        createdAt: formattedTimestamp,
+        memberLimitLeft: 40.00
+      };
+
+      setPreAuthDatabase((prev) => ({ ...prev, [newPreAuthCode]: newRecord }));
+      setLastGeneratedRecord(newRecord);
+
+      // Pre-fill pharmacy fields for fast seamless testing
+      setPharmacyPreAuthInput(newPreAuthCode);
+      setPharmacyOtpInput(randomOtp);
+      setPharmacyClaimAmount(Number(docAmount));
+
+      setIsSubmittingDoctor(false);
+    }, 400);
+  };
+
+  // Pharmacy submission handler with 3-Point Anti-Fraud checks
+  const handlePharmacySubmitClaim = (e: FormEvent) => {
+    e.preventDefault();
+    if (!pharmacyNameInput || !pharmacyBankInput || !pharmacyPreAuthInput || !pharmacyOtpInput || !pharmacyClaimAmount) return;
+
+    setIsSubmittingPharmacy(true);
+    setPharmacyClaimResult(null);
+    setFraudBlockedState(null);
+
+    const code = pharmacyPreAuthInput.trim().toUpperCase();
+    const enteredOtp = pharmacyOtpInput.trim();
+    const amountToClaim = Number(pharmacyClaimAmount);
+    const record = preAuthDatabase[code];
+
+    const now = new Date();
+    const formattedTimestamp = now.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ' at ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Step 1: Limit Check (~400ms)
+    setPharmacyProcessingStep(1);
+    setPharmacyStatusLabel('1. HealthPay checking CIMAS limit: Is member balance sufficient?');
+
+    setTimeout(() => {
+      const memberLimit = record ? record.memberLimitLeft : 40.00;
+      const isLimitOk = amountToClaim <= memberLimit;
+
+      if (!isLimitOk) {
+        // BLOCKED IF FRAUD: Limit Exceeded ($0 left)
+        setPharmacyProcessingStep(4);
+        const failureReason = `Limit exceeded. $0 left`;
+        
+        setFraudBlockedState({
+          isBlocked: true,
+          reason: failureReason,
+          limitLeft: 0,
+          action: 'CIMAS Fraud Unit Notified & Claim Blocked',
+          claimAmount: amountToClaim
+        });
+
+        const blockedClaim: ClaimResult = {
+          claimId: `RX-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+          flowType: 'Pharmacy e-Prescription',
+          hospital: pharmacyNameInput.trim(),
+          hospitalBankAccount: pharmacyBankInput.trim(),
+          memberId: record ? record.memberId : 'CIM-88213',
+          memberName: record ? record.memberName : 'Tinashe Moyo',
+          amount: amountToClaim,
+          status: 'Rejected',
+          rejectionReason: failureReason,
+          timestamp: formattedTimestamp,
+          preAuthCode: code,
+          fraudChecks: { limitOk: false, duplicateNo: true, patternOk: true }
+        };
+
+        const historyEntry: HistoryItem = {
+          id: `hist-${Date.now()}`,
+          claimId: blockedClaim.claimId,
+          flowType: 'Pharmacy e-Prescription',
+          hospital: blockedClaim.hospital,
+          hospitalBankAccount: blockedClaim.hospitalBankAccount,
+          memberId: blockedClaim.memberId,
+          memberName: blockedClaim.memberName,
+          amount: blockedClaim.amount,
+          status: 'Rejected',
+          rejectionReason: failureReason,
+          preAuthCode: code,
+          timestamp: blockedClaim.timestamp
+        };
+
+        setPharmacyClaimResult(blockedClaim);
+        setPaymentHistory((prev) => [historyEntry, ...prev].slice(0, 10));
+
+        setIsSubmittingPharmacy(false);
+        return;
+      }
+
+      // Step 2: Duplicate Check (~500ms)
+      setPharmacyProcessingStep(2);
+      setPharmacyStatusLabel('2. HealthPay checking CIMAS protocol: Is PreAuth code unredeemed?');
+
+      setTimeout(() => {
+        const isNotDuplicate = record && !record.isClaimed;
+
+        if (!isNotDuplicate) {
+          // BLOCKED IF FRAUD: Duplicate Claim
+          const failureReason = !record ? 'Invalid PreAuth code' : 'Duplicate claim. PreAuth code already redeemed';
+          setPharmacyProcessingStep(4);
+          setFraudBlockedState({
+            isBlocked: true,
+            reason: failureReason,
+            limitLeft: record ? record.memberLimitLeft : 0,
+            action: 'CIMAS Fraud Unit Notified & Claim Nullified',
+            claimAmount: amountToClaim
+          });
+
+          const blockedClaim: ClaimResult = {
+            claimId: `RX-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+            flowType: 'Pharmacy e-Prescription',
+            hospital: pharmacyNameInput.trim(),
+            hospitalBankAccount: pharmacyBankInput.trim(),
+            memberId: record ? record.memberId : 'CIM-88213',
+            memberName: record ? record.memberName : 'Tinashe Moyo',
+            amount: amountToClaim,
+            status: 'Rejected',
+            rejectionReason: failureReason,
+            timestamp: formattedTimestamp,
+            preAuthCode: code,
+            fraudChecks: { limitOk: true, duplicateNo: false, patternOk: true }
+          };
+
+          const historyEntry: HistoryItem = {
+            id: `hist-${Date.now()}`,
+            claimId: blockedClaim.claimId,
+            flowType: 'Pharmacy e-Prescription',
+            hospital: blockedClaim.hospital,
+            hospitalBankAccount: blockedClaim.hospitalBankAccount,
+            memberId: blockedClaim.memberId,
+            memberName: blockedClaim.memberName,
+            amount: blockedClaim.amount,
+            status: 'Rejected',
+            rejectionReason: failureReason,
+            preAuthCode: code,
+            timestamp: blockedClaim.timestamp
+          };
+
+          setPharmacyClaimResult(blockedClaim);
+          setPaymentHistory((prev) => [historyEntry, ...prev].slice(0, 10));
+
+          setIsSubmittingPharmacy(false);
+          return;
+        }
+
+        // Step 3: Pattern & OTP Check (~500ms)
+        setPharmacyProcessingStep(3);
+        setPharmacyStatusLabel('3. HealthPay verifying pattern & Member SMS OTP authorization...');
+
+        setTimeout(() => {
+          const isOtpValid = record && record.otp === enteredOtp;
+
+          if (!isOtpValid) {
+            // BLOCKED IF FRAUD: Bad OTP
+            setPharmacyProcessingStep(4);
+            const failureReason = 'Security failure: Invalid SMS OTP entered by member';
+            setFraudBlockedState({
+              isBlocked: true,
+              reason: failureReason,
+              limitLeft: record.memberLimitLeft,
+              action: 'CIMAS Fraud Unit Notified & Claim Blocked',
+              claimAmount: amountToClaim
+            });
+
+            const blockedClaim: ClaimResult = {
+              claimId: `RX-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+              flowType: 'Pharmacy e-Prescription',
+              hospital: pharmacyNameInput.trim(),
+              hospitalBankAccount: pharmacyBankInput.trim(),
+              memberId: record.memberId,
+              memberName: record.memberName,
+              amount: amountToClaim,
+              status: 'Rejected',
+              rejectionReason: failureReason,
+              timestamp: formattedTimestamp,
+              preAuthCode: code,
+              fraudChecks: { limitOk: true, duplicateNo: true, patternOk: false }
+            };
+
+            const historyEntry: HistoryItem = {
+              id: `hist-${Date.now()}`,
+              claimId: blockedClaim.claimId,
+              flowType: 'Pharmacy e-Prescription',
+              hospital: blockedClaim.hospital,
+              hospitalBankAccount: blockedClaim.hospitalBankAccount,
+              memberId: blockedClaim.memberId,
+              memberName: blockedClaim.memberName,
+              amount: blockedClaim.amount,
+              status: 'Rejected',
+              rejectionReason: failureReason,
+              preAuthCode: code,
+              timestamp: blockedClaim.timestamp
+            };
+
+            setPharmacyClaimResult(blockedClaim);
+            setPaymentHistory((prev) => [historyEntry, ...prev].slice(0, 10));
+
+            setIsSubmittingPharmacy(false);
+            return;
+          }
+
+          // SUCCESSFUL INSTANT PAYOUT
+          setPharmacyProcessingStep(4);
+          setPharmacyStatusLabel('CIMAS: "Approved" • FBC Bank: Disbursing 97% ($' + (amountToClaim * 0.97).toFixed(2) + ') to Pharmacy Bank Account');
+
+          // Mark PreAuth code as claimed in database
+          setPreAuthDatabase((prev) => ({
+            ...prev,
+            [code]: { ...prev[code], isClaimed: true }
+          }));
+
+          const payoutNet = amountToClaim * 0.97;
+
+          const approvedClaim: ClaimResult = {
+            claimId: `RX-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+            flowType: 'Pharmacy e-Prescription',
+            hospital: pharmacyNameInput.trim(),
+            hospitalBankAccount: pharmacyBankInput.trim(),
+            memberId: record.memberId,
+            memberName: record.memberName,
+            amount: amountToClaim,
+            status: 'Approved',
+            timestamp: formattedTimestamp,
+            preAuthCode: code,
+            doctorName: record.doctorName,
+            medicationDetails: record.medication,
+            pharmacyPayout: payoutNet,
+            fraudChecks: { limitOk: true, duplicateNo: true, patternOk: true }
+          };
+
+          const historyEntry: HistoryItem = {
+            id: `hist-${Date.now()}`,
+            claimId: approvedClaim.claimId,
+            flowType: 'Pharmacy e-Prescription',
+            hospital: approvedClaim.hospital,
+            hospitalBankAccount: approvedClaim.hospitalBankAccount,
+            memberId: approvedClaim.memberId,
+            memberName: approvedClaim.memberName,
+            amount: approvedClaim.amount,
+            status: 'Approved',
+            pharmacyPayout: payoutNet,
+            preAuthCode: code,
+            timestamp: approvedClaim.timestamp
+          };
+
+          setTimeout(() => {
+            setPharmacyClaimResult(approvedClaim);
+            setPaymentHistory((prev) => [historyEntry, ...prev].slice(0, 10));
+            setIsSubmittingPharmacy(false);
+          }, 600);
+
+        }, 500);
+
+      }, 500);
+
+    }, 400);
+  };
+
+  // Quick Preset Launcher for Fraud Simulations
+  const runFraudPreset = (presetType: 'valid' | 'limit' | 'duplicate' | 'otp') => {
+    setActiveTab('pharmacy');
+    setPharmacyRoleSubTab('pharmacy');
+
+    if (presetType === 'valid') {
+      setPharmacyPreAuthInput('PA-99821');
+      setPharmacyOtpInput('8821');
+      setPharmacyClaimAmount(15);
+      // Ensure unclaimed for valid test
+      setPreAuthDatabase((prev) => ({
+        ...prev,
+        'PA-99821': { ...prev['PA-99821'], isClaimed: false }
+      }));
+    } else if (presetType === 'limit') {
+      setPharmacyPreAuthInput('PA-99821');
+      setPharmacyOtpInput('8821');
+      setPharmacyClaimAmount(200); // Exceeds $40 limit!
+    } else if (presetType === 'duplicate') {
+      // Mark code as already claimed
+      setPreAuthDatabase((prev) => ({
+        ...prev,
+        'PA-99821': { ...prev['PA-99821'], isClaimed: true }
+      }));
+      setPharmacyPreAuthInput('PA-99821');
+      setPharmacyOtpInput('8821');
+      setPharmacyClaimAmount(15);
+    } else if (presetType === 'otp') {
+      setPharmacyPreAuthInput('PA-99821');
+      setPharmacyOtpInput('9999'); // Bad OTP
+      setPharmacyClaimAmount(15);
+      setPreAuthDatabase((prev) => ({
+        ...prev,
+        'PA-99821': { ...prev['PA-99821'], isClaimed: false }
+      }));
+    }
+  };
 
   // Provider Sequential Real-Time Submission Processing Handler
   const handleSubmit = (e: FormEvent) => {
@@ -556,7 +1003,8 @@ export default function App() {
     const matchesAmount = item.amount.toString().includes(q) || `$${item.amount.toFixed(2)}`.toLowerCase().includes(q);
     const matchesDate = item.timestamp.toLowerCase().includes(q);
 
-    return matchesId || matchesHospital || matchesHospitalBank || matchesMemberId || matchesMemberName || matchesPayoutAccount || matchesFlowType || matchesAmount || matchesDate;
+    const matchesPreAuth = item.preAuthCode ? item.preAuthCode.toLowerCase().includes(q) : false;
+    return matchesId || matchesHospital || matchesHospitalBank || matchesMemberId || matchesMemberName || matchesPayoutAccount || matchesFlowType || matchesAmount || matchesDate || matchesPreAuth;
   });
 
   // Theme-dependent root container styling
@@ -1156,6 +1604,53 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 3. e-Prescription & Pharmacy Anti-Fraud Flow */}
+              <div className={`p-6 rounded-xl space-y-4 border ${isDarkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-[#f8fafc] border-slate-200/80'
+                }`}>
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <h3 className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    3. Doctor e-Prescription & Pharmacy Fraud Guard (Instant Settlement & Anti-Fraud)
+                  </h3>
+                  <span className={`text-xs font-semibold ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                    Doctor & Pharmacy Anti-Fraud System
+                  </span>
+                </div>
+
+                <p className={`text-xs sm:text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Protects CIMAS and subscribers from fraudulent claims by enforcing Doctor e-Prescriptions, SMS OTP verification, and 3-point automated fraud checks.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs pt-1">
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-purple-600 dark:text-purple-400">Step 1: Doctor e-Prescribe</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Doctor checks CIMAS limit ($40 left) and issues PreAuth code (PA-99821) + SMS OTP.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-purple-600 dark:text-purple-400">Step 2: Pharmacy Dispense</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Pharmacist inputs PreAuth code, verifies $15 approval, dispenses drugs, and validates SMS OTP.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-purple-600 dark:text-purple-400">Step 3: 3-Point Fraud Check</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Automated audit verifies Limit OK, Duplicate NO, Pattern OK with 10s bank settlement.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-extrabold text-rose-600 dark:text-rose-400">Step 4: Fraud Blocked Guard</span>
+                    <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                      Over-limit claims ($200 on $40 limit) or bad OTPs are instantly BLOCKED and flagged to CIMAS.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
           </section>
@@ -1264,12 +1759,12 @@ export default function App() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-10">
 
         {/* MODE SWITCHER TAB NAVIGATOR */}
-        <div className={`p-1.5 rounded-2xl flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+        <div className={`p-1.5 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
           }`}>
           <button
             type="button"
             onClick={() => setActiveTab('provider')}
-            className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 transition-all cursor-pointer ${activeTab === 'provider'
+            className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${activeTab === 'provider'
                 ? 'bg-blue-600 text-white shadow-md'
                 : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#1a243a]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
               }`}
@@ -1281,13 +1776,25 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab('member')}
-            className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 transition-all cursor-pointer ${activeTab === 'member'
+            className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${activeTab === 'member'
                 ? 'bg-blue-600 text-white shadow-md'
                 : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#1a243a]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
               }`}
           >
             <User className="w-4 h-4" />
             <span>Member Reimbursement</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('pharmacy')}
+            className={`flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${activeTab === 'pharmacy'
+                ? 'bg-blue-600 text-white shadow-md'
+                : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#1a243a]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+              }`}
+          >
+            <Pill className="w-4 h-4" />
+            <span>e-Prescription & Pharmacy</span>
           </button>
         </div>
 
@@ -2232,6 +2739,733 @@ export default function App() {
                 >
                   <RotateCcw className="w-4 h-4 mr-1.5" />
                   <span>Submit another reimbursement claim</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* TAB 3: e-PRESCRIPTION & PHARMACY ANTI-FRAUD FLOW */}
+        {activeTab === 'pharmacy' && (
+          <>
+            {/* Sub-Role Selector: Doctor vs Pharmacy */}
+            <div className={`p-1.5 rounded-2xl flex items-center gap-2 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+              }`}>
+              <button
+                type="button"
+                onClick={() => setPharmacyRoleSubTab('doctor')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${pharmacyRoleSubTab === 'doctor'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#1a243a]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                  }`}
+              >
+                <Stethoscope className="w-4 h-4" />
+                <span>Doctor: Submit e-Prescription</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPharmacyRoleSubTab('pharmacy')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${pharmacyRoleSubTab === 'pharmacy'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : (isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#1a243a]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+                  }`}
+              >
+                <Pill className="w-4 h-4" />
+                <span>Pharmacy: Dispense & Claim</span>
+              </button>
+            </div>
+
+            {/* STEP 1: DOCTOR E-PRESCRIPTION SUBMISSION PORTAL */}
+            {pharmacyRoleSubTab === 'doctor' && (
+              <section className={`rounded-2xl p-6 sm:p-8 space-y-6 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+                }`}>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h2 className={`text-xl sm:text-2xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      Doctor e-Prescription authorization
+                    </h2>
+                    <p className={`text-sm font-medium mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Issue digital pre-authorization codes for subscriber prescriptions
+                    </p>
+                  </div>
+
+                  {/* Real-time CIMAS Balance Callout */}
+                  <div className={`p-3 rounded-xl flex items-center gap-3 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+                    }`}>
+                    <ShieldCheck className="w-5 h-5 text-slate-500 shrink-0" />
+                    <div className="text-xs">
+                      <div className={`font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        CIMAS: Active Member
+                      </div>
+                      <div className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Remaining limit: <span className={`font-mono font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>$40.00 USD</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleDoctorPrescribe} className="space-y-6">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+                    {/* Field 1: Doctor Name */}
+                    <div className="space-y-2">
+                      <label htmlFor="docDoctorName" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Doctor name & registration
+                      </label>
+                      <input
+                        id="docDoctorName"
+                        type="text"
+                        required
+                        value={docDoctorName}
+                        onChange={(e) => setDocDoctorName(e.target.value)}
+                        placeholder="e.g. Dr. A. Moyo, MBChB"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 2: Member ID */}
+                    <div className="space-y-2">
+                      <label htmlFor="docMemberId" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Patient / member ID
+                      </label>
+                      <input
+                        id="docMemberId"
+                        type="text"
+                        required
+                        value={docMemberId}
+                        onChange={(e) => setDocMemberId(e.target.value)}
+                        placeholder="e.g. CIM-88213"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 3: Medication Item */}
+                    <div className="space-y-2">
+                      <label htmlFor="docMedication" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Prescribed medication
+                      </label>
+                      <input
+                        id="docMedication"
+                        type="text"
+                        required
+                        value={docMedication}
+                        onChange={(e) => setDocMedication(e.target.value)}
+                        placeholder="e.g. Amoxicillin x 21 tabs"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 4: Medication Total Price */}
+                    <div className="space-y-2">
+                      <label htmlFor="docAmount" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Prescription total ($ USD)
+                      </label>
+                      <input
+                        id="docAmount"
+                        type="number"
+                        min="1"
+                        step="any"
+                        required
+                        value={docAmount}
+                        onChange={(e) => setDocAmount(e.target.value)}
+                        placeholder="15"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingDoctor}
+                      className="w-full flex items-center justify-center space-x-2 py-4 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isSubmittingDoctor ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin text-white mr-2" />
+                          <span>Authorizing e-Prescription...</span>
+                        </>
+                      ) : (
+                        <span>Submit e-Prescription</span>
+                      )}
+                    </button>
+                  </div>
+
+                </form>
+
+                {/* Generated PreAuth Code Banner */}
+                {lastGeneratedRecord && (
+                  <div className={`p-6 rounded-2xl space-y-4 animate-pop-in ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+                    }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`} />
+                          <h3 className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            e-Prescription authorized & saved
+                          </h3>
+                        </div>
+                        <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Pre-authorization code generated for {lastGeneratedRecord.memberName} ({lastGeneratedRecord.memberId}).
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setPharmacyRoleSubTab('pharmacy')}
+                        className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center gap-2 shadow-sm cursor-pointer transition-all self-start sm:self-center shrink-0"
+                      >
+                        <span>Proceed to Pharmacy Dispense</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-1">
+                      <div className={`p-3 rounded-xl space-y-0.5 ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-xs'}`}>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">PreAuth Code</span>
+                        <div className={`font-mono text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {lastGeneratedRecord.code}
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-xl space-y-0.5 ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-xs'}`}>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Pre-Approved Amount</span>
+                        <div className={`font-mono text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          ${lastGeneratedRecord.amount.toFixed(2)} USD
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-xl space-y-0.5 ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-xs'}`}>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Member SMS OTP</span>
+                        <div className={`font-mono text-base font-extrabold flex items-center gap-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          <Smartphone className="w-4 h-4 text-slate-400" />
+                          <span>{lastGeneratedRecord.otp}</span>
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-xl space-y-0.5 ${isDarkMode ? 'bg-[#131b2e]' : 'bg-white shadow-xs'}`}>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">CIMAS Status</span>
+                        <div className={`font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          Active ($40 Left)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </section>
+            )}
+
+            {/* STEP 2: PHARMACY DISPENSE & CLAIM PORTAL */}
+            {pharmacyRoleSubTab === 'pharmacy' && (
+              <section className={`rounded-2xl p-6 sm:p-8 space-y-6 transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+                }`}>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h2 className={`text-xl sm:text-2xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      Pharmacy dispense & claim
+                    </h2>
+                    <p className={`text-sm font-medium mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Verify PreAuth code, dispense medication, and process claim payout
+                    </p>
+                  </div>
+
+                  {pharmacyClaimResult && (
+                    <button
+                      type="button"
+                      onClick={handleResetPharmacy}
+                      className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer ${isDarkMode
+                        ? 'bg-[#1e293b] text-blue-400 hover:bg-[#283750]'
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                        }`}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reset form</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Minimal Subtle Testing Helpers */}
+                <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Test Scenarios:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => runFraudPreset('valid')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      Valid Claim ($15)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => runFraudPreset('limit')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      Exceed Limit ($200)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => runFraudPreset('duplicate')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      Duplicate Code
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => runFraudPreset('otp')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    >
+                      Invalid OTP
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handlePharmacySubmitClaim} className="space-y-6">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+                    {/* Field 1: Pharmacy Name */}
+                    <div className="space-y-2">
+                      <label htmlFor="pharmacyNameInput" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Pharmacy name
+                      </label>
+                      <input
+                        id="pharmacyNameInput"
+                        type="text"
+                        required
+                        value={pharmacyNameInput}
+                        onChange={(e) => setPharmacyNameInput(e.target.value)}
+                        placeholder="e.g. MedPlus Pharmacy"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 2: Pharmacy Bank Account */}
+                    <div className="space-y-2">
+                      <label htmlFor="pharmacyBankInput" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Pharmacy bank account
+                      </label>
+                      <input
+                        id="pharmacyBankInput"
+                        type="text"
+                        required
+                        value={pharmacyBankInput}
+                        onChange={(e) => setPharmacyBankInput(e.target.value)}
+                        placeholder="e.g. FBC Bank (Acc: 99182371920)"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 3: PreAuth Code */}
+                    <div className="space-y-2">
+                      <label htmlFor="pharmacyPreAuthInput" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        PreAuth code
+                      </label>
+                      <input
+                        id="pharmacyPreAuthInput"
+                        type="text"
+                        required
+                        value={pharmacyPreAuthInput}
+                        onChange={(e) => setPharmacyPreAuthInput(e.target.value)}
+                        placeholder="e.g. PA-99821"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                    {/* Field 4: Member SMS OTP */}
+                    <div className="space-y-2">
+                      <label htmlFor="pharmacyOtpInput" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Member SMS OTP code
+                      </label>
+                      <input
+                        id="pharmacyOtpInput"
+                        type="text"
+                        required
+                        value={pharmacyOtpInput}
+                        onChange={(e) => setPharmacyOtpInput(e.target.value)}
+                        placeholder="e.g. 8821"
+                        className={`w-full px-4 py-3 rounded-xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                          ? 'bg-[#0f172a] text-white'
+                          : 'bg-[#f8fafc] text-slate-900'
+                          }`}
+                      />
+                    </div>
+
+                  </div>
+
+                  {/* Field 5: Claim Amount Input */}
+                  <div className="space-y-2">
+                    <label htmlFor="pharmacyClaimAmount" className={`block text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Claim amount ($ USD)
+                    </label>
+                    <input
+                      id="pharmacyClaimAmount"
+                      type="number"
+                      min="1"
+                      step="any"
+                      required
+                      value={pharmacyClaimAmount}
+                      onChange={(e) => setPharmacyClaimAmount(e.target.value)}
+                      placeholder="15"
+                      className={`w-full px-4 py-3 rounded-xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all ${isDarkMode
+                        ? 'bg-[#0f172a] text-white'
+                        : 'bg-[#f8fafc] text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  {/* Live System Lookup Box */}
+                  {preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()] && (
+                    <div className={`p-4 rounded-xl text-xs space-y-2 ${isDarkMode ? 'bg-[#0f172a] text-white' : 'bg-[#f8fafc] text-slate-900'
+                      }`}>
+                      <div className="flex items-center justify-between font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <FileCheck className="w-4 h-4 text-slate-400" />
+                          <span>PreAuth Lookup: {pharmacyPreAuthInput.trim().toUpperCase()}</span>
+                        </span>
+                        <span className={`font-mono font-extrabold px-2 py-0.5 rounded ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-slate-200 text-slate-900'}`}>
+                          {preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].isClaimed
+                            ? 'ALREADY CLAIMED'
+                            : 'Approved for $' + preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].amount.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <div>Patient: <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>{preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].memberName} ({preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].memberId})</strong></div>
+                        <div>Doctor: <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>{preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].doctorName}</strong></div>
+                        <div>Medication: <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>{preAuthDatabase[pharmacyPreAuthInput.trim().toUpperCase()].medication}</strong></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submit Claim Button */}
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingPharmacy}
+                      className="w-full flex items-center justify-center space-x-2 py-4 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      {isSubmittingPharmacy ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin text-white mr-2" />
+                          <span>Running 3-point automated fraud checks...</span>
+                        </>
+                      ) : (
+                        <span>Submit Claim ${pharmacyClaimAmount}</span>
+                      )}
+                    </button>
+                  </div>
+
+                </form>
+
+              </section>
+            )}
+
+            {/* REAL-TIME 3-POINT FRAUD CHECK & INSTANT PAYOUT PIPELINE */}
+            {isSubmittingPharmacy && (
+              <section className={`rounded-2xl p-6 sm:p-8 space-y-6 animate-pop-in transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+                }`}>
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                    <h3 className={`text-lg font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      Automated fraud check & instant payout
+                    </h3>
+                  </div>
+                  <span className={`font-mono text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Live Handshake</span>
+                </div>
+
+                <div className={`p-6 rounded-2xl space-y-6 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                    {/* Fraud Check 1: Limit Check */}
+                    <div className={`p-4 rounded-xl space-y-2 transition-all ${pharmacyProcessingStep >= 1
+                        ? (isDarkMode ? 'bg-[#1e293b] text-white font-bold' : 'bg-white text-slate-900 font-bold shadow-xs')
+                        : 'opacity-40'
+                      }`}>
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span>Limit OK?</span>
+                        <span className="font-mono">{pharmacyProcessingStep >= 1 ? 'Auditing' : 'Pending'}</span>
+                      </div>
+                      <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        CIMAS Benefit Cap
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">Checks limit of $40 left</div>
+                    </div>
+
+                    {/* Fraud Check 2: Duplicate Check */}
+                    <div className={`p-4 rounded-xl space-y-2 transition-all ${pharmacyProcessingStep >= 2
+                        ? (isDarkMode ? 'bg-[#1e293b] text-white font-bold' : 'bg-white text-slate-900 font-bold shadow-xs')
+                        : 'opacity-40'
+                      }`}>
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span>Duplicate?</span>
+                        <span className="font-mono">{pharmacyProcessingStep >= 2 ? 'Auditing' : 'Pending'}</span>
+                      </div>
+                      <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        Code Uniqueness
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">Prevents double-redemption</div>
+                    </div>
+
+                    {/* Fraud Check 3: Pattern & OTP Check */}
+                    <div className={`p-4 rounded-xl space-y-2 transition-all ${pharmacyProcessingStep >= 3
+                        ? (isDarkMode ? 'bg-[#1e293b] text-white font-bold' : 'bg-white text-slate-900 font-bold shadow-xs')
+                        : 'opacity-40'
+                      }`}>
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span>Pattern OK?</span>
+                        <span className="font-mono">{pharmacyProcessingStep >= 3 ? 'Auditing' : 'Pending'}</span>
+                      </div>
+                      <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        Member OTP Guard
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">SMS security token verification</div>
+                    </div>
+
+                  </div>
+
+                  <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between gap-3 ${isDarkMode ? 'bg-[#0f172a] text-slate-300' : 'bg-[#f8fafc] text-slate-800'
+                    }`}>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0 text-slate-400" />
+                      <span>{pharmacyStatusLabel}</span>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+            )}
+
+            {/* FRAUD BLOCKED DEMONSTRATION & ALERT */}
+            {fraudBlockedState && (
+              <section className={`rounded-2xl p-6 sm:p-8 space-y-6 animate-pop-in transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+                }`}>
+
+                {/* Hero Blocked Banner */}
+                <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                      <XCircle className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold uppercase tracking-widest text-slate-400">
+                        SYSTEM ALERT
+                      </div>
+                      <h3 className="text-2xl font-extrabold tracking-tight">
+                        BLOCKED — FRAUD DETECTED
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="self-start sm:self-center font-mono text-xs font-bold bg-white/10 px-3 py-1.5 rounded-lg text-white">
+                    Action: CIMAS Notified
+                  </div>
+                </div>
+
+                {/* Fraud Breakdown Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm font-medium">
+
+                  <div className={`p-4 rounded-xl space-y-1 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+                    <div className="text-xs font-bold text-slate-500">Attempted Claim Amount</div>
+                    <div className={`text-xl font-extrabold font-mono ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      ${fraudBlockedState.claimAmount.toFixed(2)} USD
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl space-y-1 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+                    <div className="text-xs font-bold text-slate-500">Reason for Block</div>
+                    <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      "{fraudBlockedState.reason}"
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl space-y-1 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+                    <div className="text-xs font-bold text-slate-500">System Action</div>
+                    <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {fraudBlockedState.action}
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className={`p-4 rounded-xl text-xs font-medium space-y-1.5 ${isDarkMode ? 'bg-[#0f172a] text-slate-300' : 'bg-[#f8fafc] text-slate-700'
+                  }`}>
+                  <div className={`font-extrabold flex items-center gap-1.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <AlertCircle className="w-4 h-4 text-slate-400" />
+                    <span>How Fraud Guard Protects CIMAS Subscribers:</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    By requiring a Doctor e-Prescription code and Member SMS OTP before payout, subscribers cannot submit fraudulent or inflated reimbursement claims for medical services or drugs they did not receive.
+                  </p>
+                </div>
+
+              </section>
+            )}
+
+            {/* FRAUD CHECK PASSED + INSTANT PAYOUT RESULT */}
+            {pharmacyClaimResult && pharmacyClaimResult.status === 'Approved' && (
+              <section className={`rounded-2xl p-6 sm:p-8 space-y-6 animate-pop-in transition-colors ${isDarkMode ? 'bg-[#131b2e] shadow-xl' : 'bg-white shadow-sm'
+                }`}>
+
+                {/* Hero Result Banner */}
+                <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                        CIMAS: "Approved" — Claim Settled
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-300 font-medium mt-0.5">
+                        3-Point Fraud Checks Passed • Instant Bank Settlement Executed
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="self-start sm:self-center font-mono text-xs font-bold bg-white/10 px-3 py-1.5 rounded-lg text-white">
+                    Ref: FBC-99012
+                  </div>
+                </div>
+
+                {/* 3-Point Fraud Checks Passed Matrix */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className={`p-3.5 rounded-xl text-xs font-extrabold flex items-center justify-between ${isDarkMode ? 'bg-[#0f172a] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
+                    <span>Limit OK?</span>
+                    <span className={`font-mono px-2 py-0.5 rounded ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-slate-200 text-slate-900'}`}>YES ($15 of $40 limit)</span>
+                  </div>
+
+                  <div className={`p-3.5 rounded-xl text-xs font-extrabold flex items-center justify-between ${isDarkMode ? 'bg-[#0f172a] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
+                    <span>Duplicate?</span>
+                    <span className={`font-mono px-2 py-0.5 rounded ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-slate-200 text-slate-900'}`}>NO (Unique Code)</span>
+                  </div>
+
+                  <div className={`p-3.5 rounded-xl text-xs font-extrabold flex items-center justify-between ${isDarkMode ? 'bg-[#0f172a] text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
+                    <span>Pattern OK?</span>
+                    <span className={`font-mono px-2 py-0.5 rounded ${isDarkMode ? 'bg-[#1e293b] text-white' : 'bg-slate-200 text-slate-900'}`}>YES (OTP Valid)</span>
+                  </div>
+                </div>
+
+                {/* Countdown & Bank Payout Details */}
+                {pharmacyCountdown > 0 ? (
+                  <div className="space-y-5 py-3">
+                    <div className="flex items-center justify-between text-sm font-bold">
+                      <span className={`flex items-center gap-2 font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                        <span>FBC Bank transferring payout to Pharmacy Bank Account...</span>
+                      </span>
+                      <span className={`font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {pharmacyCountdown}s remaining
+                      </span>
+                    </div>
+
+                    <div className={`w-full rounded-full h-3 overflow-hidden ${isDarkMode ? 'bg-[#0f172a]' : 'bg-slate-200'}`}>
+                      <div
+                        className="bg-blue-600 h-full transition-all duration-1000 ease-linear rounded-full"
+                        style={{ width: `${((10 - pharmacyCountdown) / 10) * 100}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setPharmacyCountdown(0)}
+                        className={`text-xs font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}
+                      >
+                        Fast-forward (0s)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Revealed Payout Confirmation */
+                  <div className="space-y-6 animate-pop-in">
+                    <div className={`p-6 rounded-2xl space-y-4 ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'
+                      }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Landmark className="w-5 h-5 text-slate-500" />
+                            <h3 className={`text-lg font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              FBC Bank: Direct Pharmacy Payout Disbursed
+                            </h3>
+                          </div>
+                          <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            Paid ${pharmacyClaimResult.pharmacyPayout?.toFixed(2)} USD (97% net) to {pharmacyClaimResult.hospitalBankAccount || 'Pharmacy Bank Account'}.
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <div className={`text-2xl font-extrabold font-mono ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            ${pharmacyClaimResult.pharmacyPayout?.toFixed(2)} USD
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-500">Status: PAID | Ref: FBC-99012</div>
+                        </div>
+                      </div>
+
+                      <div className={`pt-3 border-t text-xs font-medium flex flex-col sm:flex-row justify-between gap-2 ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-600'
+                        }`}>
+                        <div>
+                          <span>Pharmacy: </span>
+                          <span className="font-bold text-slate-900 dark:text-white">{pharmacyClaimResult.hospital}</span>
+                          <span> ({pharmacyClaimResult.hospitalBankAccount})</span>
+                        </div>
+                        <div>
+                          <span>PreAuth code: </span>
+                          <span className={`font-mono font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{pharmacyClaimResult.preAuthCode}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </section>
+            )}
+
+            {/* Action to reset or try another claim */}
+            {pharmacyClaimResult && (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleResetPharmacy}
+                  className={`w-full flex items-center justify-center space-x-2 py-4 px-6 rounded-2xl font-extrabold text-sm shadow-sm transition-all cursor-pointer ${isDarkMode
+                    ? 'bg-[#131b2e] hover:bg-[#1c2844] text-blue-400'
+                    : 'bg-white hover:bg-slate-100 text-blue-600'
+                    }`}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1.5" />
+                  <span>Process another prescription claim</span>
                 </button>
               </div>
             )}
